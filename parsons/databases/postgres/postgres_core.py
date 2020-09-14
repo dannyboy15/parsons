@@ -172,13 +172,13 @@ class PostgresCore(PostgresCreateStatement):
                 The table to check
             if_exists: str
                 If the table already exists, either ``fail``, ``append``, ``drop``,
-                or ``truncate`` the table.
+                ``truncate``, or ``drop_cascade`` the table.
         `Returns:`
             bool
                 True if the table needs to be created, False otherwise.
         """
 
-        if if_exists not in ['fail', 'truncate', 'append', 'drop']:
+        if if_exists not in ['fail', 'truncate', 'append', 'drop', 'drop_cascade']:
             raise ValueError("Invalid value for `if_exists` argument")
 
         # If the table exists, evaluate the if_exists argument for next steps.
@@ -192,9 +192,10 @@ class PostgresCore(PostgresCreateStatement):
                 logger.info(f"Truncating {table_name}.")
                 self.query_with_connection(truncate_sql, connection, commit=False)
 
-            if if_exists == 'drop':
+            if if_exists in ['drop', 'drop_cascade']:
                 logger.info(f"Dropping {table_name}.")
-                drop_sql = f"DROP TABLE {table_name};"
+                cascade = " CASCADE" if if_exists == 'drop_cascade' else ""
+                drop_sql = f"DROP TABLE {table_name}{cascade};"
                 self.query_with_connection(drop_sql, connection, commit=False)
                 return True
 
