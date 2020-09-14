@@ -1,5 +1,5 @@
 from parsons.databases.database.constants import (
-    SMALLINT, MEDIUMINT, INT, BIGINT, FLOAT, VARCHAR)
+    SMALLINT, MEDIUMINT, INT, BIGINT, FLOAT, VARCHAR, DATE, DATETIME)
 
 from parsons.databases.database.database import DatabaseCreateStatement
 
@@ -67,6 +67,8 @@ def test_get_bigger_int(dcs, int1, int2, higher):
      ([], False),
      ([], False),
      (None, False),
+     ("2019-10-09", False),
+     ("2019-10-09 15:24", False),
      ))
 def test_is_valid_sql_num(dcs, val, is_valid):
     assert dcs.is_valid_sql_num(val) == is_valid
@@ -91,6 +93,18 @@ def test_is_valid_sql_num(dcs, val, is_valid):
      ("word", None, VARCHAR),
      ("1_2", None, VARCHAR),
      ("01", None, VARCHAR),
+     ("2019-10-09", None, DATE),
+     ("2019-10-09", DATE, DATE),
+     ("2019-10-09", DATETIME, DATETIME),
+     ("2019-10-09", INT, VARCHAR),
+     ("2019-10-09", FLOAT, VARCHAR),
+     ("2019-10-09", VARCHAR, VARCHAR),
+     ("2019-10-09 15:24", None, DATETIME),
+     ("2019-10-09 15:24", DATE, DATETIME),
+     ("2019-10-09 15:24", DATETIME, DATETIME),
+     ("2019-10-09 15:24", INT, VARCHAR),
+     ("2019-10-09 15:24", FLOAT, VARCHAR),
+     ("2019-10-09 15:24", VARCHAR, VARCHAR),
      ))
 def test_detect_data_type(dcs, val, cmp_type, detected_type):
     assert dcs.detect_data_type(val, cmp_type) == detected_type

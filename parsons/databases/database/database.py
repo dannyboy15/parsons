@@ -1,4 +1,7 @@
 import parsons.databases.database.constants as consts
+
+from dateutil.parser._parser import ParserError
+from dateutil.parser import parse
 import ast
 
 
@@ -22,6 +25,9 @@ class DatabaseCreateStatement():
         self.COL_NAME_MAX_LEN = consts.COL_NAME_MAX_LEN
         self.IS_CASE_SENSITIVE = consts.IS_CASE_SENSITIVE
         self.REPLACE_CHARS = consts.REPLACE_CHARS
+        self.PARSE_DATES = consts.PARSE_DATES
+        self.DATE = consts.DATE
+        self.DATETIME = consts.DATETIME
 
     # This will allow child classes to modify how these columns are handled.
     def _rename_reserved_word(self, col, index=None):
@@ -52,6 +58,27 @@ class DatabaseCreateStatement():
         """
         return f"{col}_{index}"
 
+    def _detect_date(self, str_):
+        try:
+            # if it can be converted to a number
+            # then don't consider it a datetime
+            if float(str_) or int(str_):
+                return
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            dt = parse(str_)
+        except (TypeError, ValueError, ParserError):
+            return self.VARCHAR
+
+        # If it contains any time parts then it should be a datetime
+        # otherwise it's just a date
+        if any((dt.hour, dt.minute, dt.second)):
+            return self.DATETIME
+        else:
+            return self.DATE
+
     def get_bigger_int(self, int1, int2):
         """Return the bigger of the two ints.
 
@@ -72,6 +99,15 @@ class DatabaseCreateStatement():
         }
 
         return int1 if WEIGHTS.get(int1, -1) >= WEIGHTS.get(int2, -1) else int2
+
+    def get_higher_date_type(self, dt1, dt2):
+        WEIGHTS = {
+            self.DATE: 100,
+            self.DATETIME: 200,
+            self.VARCHAR: 300,
+        }
+
+        return dt1 if WEIGHTS.get(dt1, -1) >= WEIGHTS.get(dt2, -1) else dt2
 
     def is_valid_sql_num(self, val):
         """Check whether val is a valid sql number.
@@ -139,7 +175,16 @@ class DatabaseCreateStatement():
         try:
             val_lit = ast.literal_eval(str(value))
         except (SyntaxError, ValueError):
-            return self.VARCHAR
+            if self.PARSE_DATES:
+                date_type = self.get_higher_date_type(
+                    self._detect_date(value), cmp_type)
+
+                if date_type and cmp_type not in self.INT_TYPES + [self.FLOAT]:
+                    return date_type
+                else:
+                    return self.VARCHAR
+            else:
+                return self.VARCHAR
 
         # Exit early if it's None
         # is_valid_sql_num(None) == False
@@ -151,8 +196,18 @@ class DatabaseCreateStatement():
         # Make sure that it is a valid integer
         # Python accepts 100_000 as a valid form of 100000,
         # however a sql engine may throw an error
+        # Test value and not val_lit b/c
+        # ast.literal_eval(str('1_2')) == 12
         if not self.is_valid_sql_num(value):
-            return self.VARCHAR
+            if self.PARSE_DATES:
+                date_type = self.get_higher_date_type(
+                    self._detect_date(val_lit), cmp_type)
+                if date_type and cmp_type not in self.INT_TYPES + [self.FLOAT]:
+                    return date_type
+                else:
+                    return self.VARCHAR
+            else:
+                return self.VARCHAR
 
         type_lit = type(val_lit)
 
